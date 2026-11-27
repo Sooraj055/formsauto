@@ -58,16 +58,21 @@ def test_short_answer_synonyms_match_confidently() -> None:
 def test_radio_ticket_quantity_selects_four_and_pauses_when_unavailable() -> None:
     profile = _sample_profile()
 
-    q_avail = DetectedQuestion(
-        question_id="q_mc_1",
-        title="How many tickets do you need?",
-        question_type=QuestionType.MULTIPLE_CHOICE,
-        required=True,
-        options=["1 Ticket", "2 Tickets", "3 Tickets", "4 Tickets", "5 Tickets"],
-    )
-    res_avail = analyze_question(q_avail, profile)
-    assert res_avail.status == MatchStatus.MATCHED
-    assert res_avail.proposed_answer == "4 Tickets"
+    for label_set, expected in (
+        (["1", "2", "3", "4"], "4"),
+        (["1 Ticket", "2 Tickets", "3 Tickets", "4 Tickets", "5 Tickets"], "4 Tickets"),
+        (["One ticket", "Two tickets", "Three tickets", "Four tickets"], "Four tickets"),
+    ):
+        q_avail = DetectedQuestion(
+            question_id="q_mc_1",
+            title="How many tickets do you need?",
+            question_type=QuestionType.MULTIPLE_CHOICE,
+            required=True,
+            options=label_set,
+        )
+        res_avail = analyze_question(q_avail, profile)
+        assert res_avail.status == MatchStatus.MATCHED
+        assert res_avail.proposed_answer == expected
 
     # Must NEVER silently pick 3 Tickets when 4 is missing
     q_missing = DetectedQuestion(

@@ -240,7 +240,7 @@ function subscribeRunEvents(runId) {
 }
 
 function isTerminal(status) {
-  return ["submitted", "blocked", "failed", "uncertain_timeout", "duplicate_blocked"].includes(status);
+  return ["submitted", "blocked", "failed", "unknown", "uncertain_timeout", "duplicate_blocked"].includes(status);
 }
 
 function renderRunSummary(summary) {
@@ -262,7 +262,8 @@ function renderRunSummary(summary) {
     submitted: ["Submitted", "pill-green"],
     blocked: ["Blocked", "pill-red"],
     failed: ["Failed", "pill-red"],
-    uncertain_timeout: ["Uncertain", "pill-yellow"],
+    unknown: ["Unknown", "pill-yellow"],
+    uncertain_timeout: ["Unknown", "pill-yellow"],
     duplicate_blocked: ["Duplicate Guard", "pill-yellow"],
   };
   const [label, cls] = statusMap[summary.status] || [summary.status, "pill-neutral"];
@@ -372,16 +373,17 @@ function renderBanner(summary) {
     actions.appendChild(openLink);
     actions.classList.remove("hidden");
     banner.classList.remove("hidden");
-  } else if (["blocked", "failed", "uncertain_timeout"].includes(summary.status)) {
-    banner.className = `card banner ${summary.status === "uncertain_timeout" ? "warn" : "error"}`;
+  } else if (["blocked", "failed", "unknown", "uncertain_timeout"].includes(summary.status)) {
+    const isUncertain = summary.status === "unknown" || summary.status === "uncertain_timeout";
+    banner.className = `card banner ${isUncertain ? "warn" : "error"}`;
     title.textContent =
       summary.status === "blocked"
         ? "Manual Action Required"
-        : summary.status === "uncertain_timeout"
-        ? "Submission Uncertain"
+        : isUncertain
+        ? "Submission Status Unknown"
         : "Run Stopped";
-    tag.textContent = summary.status.replace("_", " ");
-    tag.className = `pill ${summary.status === "uncertain_timeout" ? "pill-yellow" : "pill-red"}`;
+    tag.textContent = summary.status.replace("_", " ").toUpperCase();
+    tag.className = `pill ${isUncertain ? "pill-yellow" : "pill-red"}`;
     msg.textContent = summary.message;
 
     const openLink = document.createElement("a");

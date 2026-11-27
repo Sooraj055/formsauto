@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -16,6 +17,21 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import DB_PATH, KEY_PATH, logger
 from app.models import CustomProfileField, HistoryEntry, UserProfile
+
+
+def _coerce_fernet_key(secret: str) -> bytes:
+    """Accept a Fernet key or any other stable secret.
+
+    Render's generated environment values are not Fernet tokens. Deriving a
+    key from the secret keeps the database readable across restarts as long
+    as FORMRUSH_SECRET_KEY itself does not change.
+    """
+    raw = secret.encode("utf-8")
+    try:
+        Fernet(raw)
+        return raw
+    except Exception:
+        return base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
 
 
 def _default_seed_profile() -> UserProfile:
@@ -46,7 +62,7 @@ class SecureStorage:
     def _load_or_create_fernet(self) -> Fernet:
         env_key = os.getenv("FORMRUSH_SECRET_KEY", "").strip()
         if env_key:
-            return Fernet(env_key.encode("utf-8"))
+            return Fernet(_coerce_fernet_key(env_key))
         if self.key_path.exists():
             raw = self.key_path.read_bytes().strip()
             return Fernet(raw)
@@ -62,6 +78,8 @@ class SecureStorage:
     def _connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(str(self.db_path), timeout=10.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA journal_mode=WAL")
         try:
             yield conn
         finally:
@@ -222,14 +240,14 @@ class SecureStorage:
             conn.commit()
 
     def get_previous_form_status(self, canonical_key: str) -> HistoryEntry | None:
-        """Check if this form already has a submitted or uncertain_timeout attempt."""
+        """Check if this form already has a submitted or uncertain/unknown attempt."""
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT id, run_id, canonical_key, form_title, status, total_questions,
                        matched_count, filled_count, message, elapsed_ms, created_at, updated_at
                 FROM registration_history
-                WHERE canonical_key = ? AND status IN ('submitted', 'uncertain_timeout')
+                WHERE canonical_key = ? AND status IN ('submitted', 'uncertain_timeout', 'unknown')
                 ORDER BY id DESC
                 LIMIT 1
                 """,

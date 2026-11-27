@@ -50,7 +50,8 @@ class RunStatus(str, Enum):
     PAUSED = "paused"            # Needs user input for missing/ambiguous required questions
     SUBMITTED = "submitted"      # Confirmed submitted
     BLOCKED = "blocked"          # CAPTCHA, sign-in required, closed form, etc.
-    UNCERTAIN_TIMEOUT = "uncertain_timeout"  # Timed out during submit; do not blindly retry
+    UNKNOWN = "unknown"          # Submission initiated, outcome uncertain; never blindly retry
+    UNCERTAIN_TIMEOUT = "uncertain_timeout"  # Legacy alias kept for compatibility
     FAILED = "failed"
     DUPLICATE_BLOCKED = "duplicate_blocked"
 
@@ -147,6 +148,7 @@ class RunSummary(BaseModel):
     confirmation_text: str = ""
     error_detail: str = ""
     duplicate_warning: dict[str, Any] | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     elapsed_ms: int = 0
 
 

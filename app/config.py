@@ -5,12 +5,22 @@ from __future__ import annotations
 import logging
 import os
 import re
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.getenv("FORMRUSH_DATA_DIR", str(BASE_DIR / "data")))
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Resolve writable data directory: environment variable > project/data > OS temp dir fallback
+_candidate_data_dir = Path(os.getenv("FORMRUSH_DATA_DIR", str(BASE_DIR / "data")))
+try:
+    _candidate_data_dir.mkdir(parents=True, exist_ok=True)
+    DATA_DIR = _candidate_data_dir
+except OSError:
+    # Read-only filesystem (e.g. Vercel serverless): fall back to temp directory
+    _fallback = Path(tempfile.gettempdir()) / "formrush_data"
+    _fallback.mkdir(parents=True, exist_ok=True)
+    DATA_DIR = _fallback
 
 DB_PATH = DATA_DIR / "formrush.db"
 KEY_PATH = DATA_DIR / ".secret.key"

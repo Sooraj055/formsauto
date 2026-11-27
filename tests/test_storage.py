@@ -61,6 +61,19 @@ def test_url_validation_and_whatsapp_extraction() -> None:
     assert "Unsupported domain" in err
 
 
+def test_non_fernet_secret_is_stable_across_reopen(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMRUSH_SECRET_KEY", "render-generated-secret-not-a-fernet-key")
+    db_file = tmp_path / "stable.db"
+    key_file = tmp_path / ".unused.key"
+    first = SecureStorage(db_path=db_file, key_path=key_file)
+    saved = first.get_profile()
+    saved.full_name = "Persisted Name"
+    first.save_profile(saved)
+
+    second = SecureStorage(db_path=db_file, key_path=key_file)
+    assert second.get_profile().full_name == "Persisted Name"
+
+
 def test_pii_redaction_and_pin_auth(tmp_path: Path) -> None:
     msg = "Failed for Test User at 9876543210 (testuser@example.com)"
     redacted = redact_sensitive(msg, ["Test User", "9876543210", "testuser@example.com"])

@@ -34,6 +34,7 @@ TERMINAL_STATUSES = {
     RunStatus.SUBMITTED,
     RunStatus.BLOCKED,
     RunStatus.FAILED,
+    RunStatus.UNKNOWN,
     RunStatus.UNCERTAIN_TIMEOUT,
     RunStatus.DUPLICATE_BLOCKED,
 }

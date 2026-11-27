@@ -1,8 +1,10 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    FORMRUSH_DATA_DIR=/app/data
 
 WORKDIR /app
 
@@ -17,4 +19,5 @@ RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# exec so uvicorn receives SIGTERM and can close Chromium on shutdown.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*"]

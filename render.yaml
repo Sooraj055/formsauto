@@ -2,7 +2,8 @@ services:
   - type: web
     name: formrush
     runtime: docker
-    plan: starter
+    # Chromium needs more than the 512 MB starter instance.
+    plan: standard
     healthCheckPath: /api/health
     envVars:
       - key: FORMRUSH_SECRET_KEY
@@ -11,6 +12,20 @@ services:
         sync: false
       - key: FORMRUSH_DATA_DIR
         value: /app/data
+      - key: FORMRUSH_DEFAULT_NAME
+        sync: false
+      - key: FORMRUSH_DEFAULT_MOBILE
+        sync: false
+      - key: FORMRUSH_DEFAULT_EMAIL
+        sync: false
+      - key: FORMRUSH_DEFAULT_TICKETS
+        value: "4"
+      - key: FORMRUSH_DEFAULT_CITY
+        sync: false
+      - key: FORMRUSH_DEFAULT_ADDRESS
+        sync: false
+      - key: FORMRUSH_DEFAULT_PIN
+        sync: false
     disk:
       name: formrush-data
       mountPath: /app/data

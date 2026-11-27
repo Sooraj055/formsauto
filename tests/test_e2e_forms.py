@@ -206,7 +206,7 @@ class FixtureServer:
                     )
                     html = GOOGLE_FORM_TEMPLATE.format(
                         form_title="8 PM Ticket Token Registration",
-                        extra_banner="",
+                        extra_banner='<div class="autosave-notice">Sign in to Google to save your progress. Learn more</div>',
                         items_html=items,
                         buttons_html='<div role="button" jsname="M2UYVd" tabindex="0">Submit</div>',
                         submit_endpoint="/submit/full_auto",
@@ -281,6 +281,71 @@ class FixtureServer:
                         confirm_url="/forms/d/e/captcha_form/formResponse",
                         next_url="",
                     )
+                    self._send_html(html)
+                elif path == "/forms/d/e/auth_required/viewform":
+                    self._send_html(
+                        """<!DOCTYPE html><html><head><title>You need permission</title></head>
+                        <body><div>You need permission</div><div>Sign in to continue to Google Forms.</div></body></html>"""
+                    )
+                elif path == "/forms/d/e/closed_form/viewform":
+                    self._send_html(
+                        """<!DOCTYPE html><html><head><title>Closed Form</title></head>
+                        <body><div>This form is no longer accepting responses.</div></body></html>"""
+                    )
+                elif path == "/forms/d/e/delayed_confirm/viewform":
+                    items = (
+                        _item_short("Name", True)
+                        + _item_radio("Number of tickets", ["1", "2", "3", "Four tickets"], True)
+                    )
+                    html = GOOGLE_FORM_TEMPLATE.format(
+                        form_title="Delayed Confirm Form",
+                        extra_banner='<div class="autosave-notice">Sign in to Google to save your progress.</div>',
+                        items_html=items,
+                        buttons_html='<div role="button" jsname="M2UYVd" tabindex="0">Submit</div>',
+                        submit_endpoint="/submit/delayed_confirm",
+                        confirm_url="/forms/d/e/delayed_confirm/formResponse",
+                        next_url="",
+                    )
+                    self._send_html(html)
+                elif path == "/forms/d/e/delayed_confirm/formResponse":
+                    # Simulate navigation landing on /formResponse before confirmation node hydrates
+                    self._send_html(
+                        """<!DOCTYPE html><html><body>
+                        <div id="root">Loading...</div>
+                        <script>
+                          setTimeout(() => {
+                            document.getElementById('root').innerHTML =
+                              '<div class="vHW8K">Your response has been recorded.</div><a href="viewform">Submit another response</a>';
+                          }, 450);
+                        </script>
+                        </body></html>"""
+                    )
+                elif path == "/forms/d/e/stall_submit/viewform":
+                    items = _item_short("Name", True) + _item_radio("Number of tickets", ["1", "2", "3", "4"], True)
+                    html = GOOGLE_FORM_TEMPLATE.format(
+                        form_title="Stalling Submit Form",
+                        extra_banner="",
+                        items_html=items,
+                        buttons_html='<div role="button" jsname="M2UYVd" tabindex="0">Submit</div>',
+                        submit_endpoint="/submit/stall_submit",
+                        confirm_url="/forms/d/e/stall_submit/never_confirms",
+                        next_url="",
+                    )
+                    self._send_html(html)
+                elif path == "/forms/d/e/stall_submit/never_confirms":
+                    self._send_html("""<!DOCTYPE html><html><body><div>Processing...</div></body></html>""")
+                elif path == "/forms/d/e/broken_radio/viewform":
+                    items = _item_short("Name", True) + _item_radio("Number of tickets", ["1", "2", "3", "4"], False)
+                    # Override click handler so radio refuses to flip aria-checked="true"
+                    html = GOOGLE_FORM_TEMPLATE.format(
+                        form_title="Broken Radio Form",
+                        extra_banner="",
+                        items_html=items,
+                        buttons_html='<div role="button" jsname="M2UYVd" tabindex="0">Submit</div>',
+                        submit_endpoint="/submit/broken_radio",
+                        confirm_url="/forms/d/e/broken_radio/formResponse",
+                        next_url="",
+                    ).replace("r.setAttribute('aria-checked', 'true');", "// broken radio")
                     self._send_html(html)
                 elif path.endswith("/formResponse"):
                     self._send_html(
@@ -422,5 +487,84 @@ async def test_end_to_end_google_form_scenarios(tmp_path: Path, monkeypatch) -> 
                 summary5 = await _wait_for_non_running(client, r5.json()["run_id"])
                 assert summary5["status"] == "blocked"
                 assert "CAPTCHA" in summary5["message"]
+
+                # 7. Genuine Google Sign-In / permission gate -> BLOCKED
+                r6 = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/auth_required/viewform"})
+                summary6 = await _wait_for_non_running(client, r6.json()["run_id"])
+                assert summary6["status"] == "blocked"
+                assert "Sign-In" in summary6["message"] or "permission" in summary6["message"]
+
+                # 8. Closed form -> BLOCKED with closed message
+                r7 = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/closed_form/viewform"})
+                summary7 = await _wait_for_non_running(client, r7.json()["run_id"])
+                assert summary7["status"] == "blocked"
+                assert "closed" in summary7["message"].lower()
+
+                # 9. HTTP 404 -> FAILED (distinguished from auth block)
+                r8 = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/missing_404/viewform"})
+                summary8 = await _wait_for_non_running(client, r8.json()["run_id"])
+                assert summary8["status"] == "failed"
+                assert "404" in summary8["message"]
+
+                # 10. Delayed /formResponse confirmation (no false "no form questions rendered" error) + "Four tickets" radio
+                r9 = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/delayed_confirm/viewform"})
+                summary9 = await _wait_for_non_running(client, r9.json()["run_id"])
+                assert summary9["status"] == "submitted", summary9
+                assert summary9["filled_count"] == 2
+                assert summary9["diagnostics"].get("confirmation_detected") is True
+                assert fixtures.received_submissions["delayed_confirm"][0]["Number of tickets"] == "Four tickets"
+
+                # 11. Radio verification failure -> PAUSED, never pretends filled or submits
+                r10 = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/broken_radio/viewform"})
+                summary10 = await _wait_for_non_running(client, r10.json()["run_id"])
+                assert summary10["status"] == "paused", summary10
+                assert summary10["filled_count"] == 1
+                assert "broken_radio" not in fixtures.received_submissions
+                await client.post(f"/api/runs/{summary10['run_id']}/cancel")
+
+                # 12. Uncertain / timed-out submission -> status UNKNOWN + blocks duplicate retry
+                import app.automation as auto_mod
+                orig_timeout = auto_mod.SUBMIT_TIMEOUT_MS
+                auto_mod.SUBMIT_TIMEOUT_MS = 600
+                engine = app.state.engine
+                original_emit = engine._emit
+                retry_during_emit: dict[str, Any] = {}
+
+                async def emit_and_retry_immediately(sess: Any) -> None:
+                    # A subscriber that retries inside the terminal event must not
+                    # observe the in-flight lock. That lock has to be released
+                    # before _emit, or this request returns HTTP 409.
+                    if (
+                        getattr(sess.status, "value", sess.status) == "unknown"
+                        and "stall_submit" in sess.canonical_key
+                        and "status_code" not in retry_during_emit
+                    ):
+                        retry = await client.post(
+                            "/api/runs/start",
+                            json={"url": f"{base_url}/forms/d/e/stall_submit/viewform"},
+                        )
+                        retry_during_emit["status_code"] = retry.status_code
+                        retry_during_emit["body"] = retry.json()
+                    await original_emit(sess)
+
+                engine._emit = emit_and_retry_immediately
+                try:
+                    r11 = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/stall_submit/viewform"})
+                    summary11 = await _wait_for_non_running(client, r11.json()["run_id"])
+                    assert summary11["status"] == "unknown", summary11
+                    assert summary11["diagnostics"].get("submission_initiated") is True
+                    assert summary11["diagnostics"].get("confirmation_detected") is False
+                    assert retry_during_emit.get("status_code") == 200, retry_during_emit
+                    assert retry_during_emit["body"]["status"] == "duplicate_blocked"
+                finally:
+                    auto_mod.SUBMIT_TIMEOUT_MS = orig_timeout
+                    engine._emit = original_emit
+
+                # Retrying after UNKNOWN must trigger duplicate protection, never a second submit
+                r11_retry = await client.post("/api/runs/start", json={"url": f"{base_url}/forms/d/e/stall_submit/viewform"})
+                assert r11_retry.status_code == 200
+                assert r11_retry.json()["status"] == "duplicate_blocked"
+                # The timed-out click may have reached the form once. The retry must not send another.
+                assert len(fixtures.received_submissions.get("stall_submit", [])) == 1
     finally:
         fixtures.stop()
