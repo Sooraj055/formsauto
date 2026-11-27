@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0b0f17" />
+  <title>FormRush — Rapid Google Forms Autofiller</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div id="pinModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle">
+    <div class="modal-card">
+      <h2 id="pinModalTitle">Unlock FormRush</h2>
+      <p class="muted">Enter your access PIN to load your encrypted profile and start registrations.</p>
+      <form id="pinUnlockForm" class="stack">
+        <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter PIN" required />
+        <p id="pinError" class="error-text hidden"></p>
+        <button type="submit" class="btn btn-primary btn-lg">Unlock</button>
+      </form>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-bolt" aria-hidden="true">⚡</span>
+      <div>
+        <h1>FormRush</h1>
+        <span class="subtitle">Auto-Fill &amp; Auto-Submit Engine</span>
+      </div>
+    </div>
+    <div class="status-pills">
+      <span id="engineBadge" class="pill pill-neutral">Checking...</span>
+    </div>
+  </header>
+
+  <nav class="tabbar" aria-label="Primary navigation">
+    <button class="tab-btn active" data-tab="runTab" type="button">Launch</button>
+    <button class="tab-btn" data-tab="profileTab" type="button">Profile</button>
+    <button class="tab-btn" data-tab="historyTab" type="button">History</button>
+  </nav>
+
+  <main class="container">
+    <!-- LAUNCH / RUN TAB -->
+    <section id="runTab" class="tab-panel active">
+      <div class="card hero-card">
+        <div class="row-between">
+          <span class="mode-badge">AUTO-FILL + AUTO-SUBMIT ON</span>
+          <span id="elapsedBadge" class="muted mono hidden">0 ms</span>
+        </div>
+        <form id="startRunForm" class="stack" novalidate>
+          <label for="formUrlInput" class="field-label">Paste WhatsApp Google Forms Link</label>
+          <div class="url-row">
+            <input
+              id="formUrlInput"
+              type="url"
+              inputmode="url"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              placeholder="https://docs.google.com/forms/d/e/.../viewform"
+              required
+            />
+            <button id="pasteBtn" type="button" class="btn btn-secondary" title="Paste from clipboard">Paste</button>
+          </div>
+          <p id="urlError" class="error-text hidden"></p>
+          <div class="action-row">
+            <button id="startBtn" type="submit" class="btn btn-primary btn-lg full-width">
+              Analyze / Start
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- DUPLICATE / BLOCKER / RESULT BANNER -->
+      <div id="resultBanner" class="card banner hidden">
+        <div class="banner-header">
+          <strong id="bannerTitle">Status</strong>
+          <span id="bannerTag" class="pill"></span>
+        </div>
+        <p id="bannerMessage" class="banner-msg"></p>
+        <p id="bannerConfirmation" class="confirmation-box hidden"></p>
+        <div id="bannerActions" class="banner-actions hidden"></div>
+      </div>
+
+      <!-- PAUSED MISSING/AMBIGUOUS QUESTIONS RESOLVER -->
+      <div id="pausePanel" class="card pause-card hidden">
+        <div class="row-between">
+          <h2>Action Needed</h2>
+          <span class="pill pill-red">Paused</span>
+        </div>
+        <p class="muted">Provide the required details below to resume and submit immediately without restarting.</p>
+        <form id="resumeForm" class="stack">
+          <div id="unresolvedList" class="stack"></div>
+          <div class="dual-actions">
+            <button id="cancelRunBtn" type="button" class="btn btn-ghost">Cancel</button>
+            <button id="resumeSubmitBtn" type="submit" class="btn btn-primary btn-lg">Fill &amp; Submit</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- LIVE PROGRESS STAGES + ANALYSIS METRICS -->
+      <div id="analysisSection" class="stack hidden">
+        <div class="card">
+          <div class="row-between">
+            <h2 id="runFormTitle">Form Analysis</h2>
+            <span id="runStatusPill" class="pill pill-neutral">Running</span>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <span class="metric-val" id="mTotal">0</span>
+              <span class="metric-lbl">Detected</span>
+            </div>
+            <div class="metric-box green">
+              <span class="metric-val" id="mMatched">0</span>
+              <span class="metric-lbl">Matched</span>
+            </div>
+            <div class="metric-box green">
+              <span class="metric-val" id="mFilled">0</span>
+              <span class="metric-lbl">Filled</span>
+            </div>
+            <div class="metric-box red">
+              <span class="metric-val" id="mMissing">0</span>
+              <span class="metric-lbl">Missing Req</span>
+            </div>
+            <div class="metric-box yellow">
+              <span class="metric-val" id="mOptional">0</span>
+              <span class="metric-lbl">Opt Skipped</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Registration Progress</h3>
+          <ol id="stageTimeline" class="timeline"></ol>
+        </div>
+
+        <div class="card">
+          <h3>Detected Questions</h3>
+          <div id="questionsList" class="questions-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROFILE TAB -->
+    <section id="profileTab" class="tab-panel">
+      <div class="card">
+        <div class="row-between">
+          <h2>Saved Personal Profile</h2>
+          <span class="pill pill-green">AES Encrypted</span>
+        </div>
+        <p class="muted">Used automatically across all Google Forms. Never exposed in logs or public URLs.</p>
+
+        <form id="profileForm" class="stack">
+          <div class="field-group">
+            <label for="pFullName">Full name</label>
+            <input id="pFullName" name="full_name" type="text" required />
+          </div>
+          <div class="field-group">
+            <label for="pMobile">Mobile number</label>
+            <input id="pMobile" name="mobile_number" type="tel" inputmode="tel" required />
+          </div>
+          <div class="field-group">
+            <label for="pEmail">Email address</label>
+            <input id="pEmail" name="email" type="email" inputmode="email" required />
+          </div>
+          <div class="field-group">
+            <label for="pTickets">Preferred ticket quantity</label>
+            <input id="pTickets" name="preferred_ticket_quantity" type="number" min="1" max="50" required />
+          </div>
+          <div class="field-group">
+            <label for="pCity">Place / City</label>
+            <input id="pCity" name="place_city" type="text" required />
+          </div>
+          <div class="field-group">
+            <label for="pAddress">Address / Locality</label>
+            <input id="pAddress" name="address_locality" type="text" required />
+          </div>
+          <div class="field-group">
+            <label for="pPin">PIN code</label>
+            <input id="pPin" name="pin_code" type="text" inputmode="numeric" required />
+          </div>
+
+          <div class="divider"></div>
+          <div class="row-between">
+            <h3>Additional Profile Fields</h3>
+            <button id="addCustomFieldBtn" type="button" class="btn btn-secondary btn-sm">+ Add Field</button>
+          </div>
+          <div id="customFieldsContainer" class="stack"></div>
+
+          <p id="profileMsg" class="status-msg hidden"></p>
+          <button type="submit" class="btn btn-primary btn-lg">Save Encrypted Profile</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Access Lock (Recommended for Cloud)</h3>
+        <p class="muted">Require a PIN before anyone opening this URL can view your profile or trigger forms.</p>
+        <form id="pinConfigForm" class="url-row">
+          <input id="newPinInput" type="password" inputmode="numeric" placeholder="New PIN (4+ chars, empty clears)" />
+          <button type="submit" class="btn btn-secondary">Set PIN</button>
+        </form>
+        <p id="pinConfigMsg" class="status-msg hidden"></p>
+      </div>
+    </section>
+
+    <!-- HISTORY TAB -->
+    <section id="historyTab" class="tab-panel">
+      <div class="card">
+        <div class="row-between">
+          <h2>Recent Registration Attempts</h2>
+          <button id="refreshHistoryBtn" type="button" class="btn btn-secondary btn-sm">Refresh</button>
+        </div>
+        <div id="historyList" class="stack"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

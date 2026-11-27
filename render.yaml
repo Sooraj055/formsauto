@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: formrush
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: FORMRUSH_SECRET_KEY
+        generateValue: true
+      - key: FORMRUSH_ACCESS_PIN
+        sync: false
+      - key: FORMRUSH_DATA_DIR
+        value: /app/data
+    disk:
+      name: formrush-data
+      mountPath: /app/data
+      sizeGB: 1
